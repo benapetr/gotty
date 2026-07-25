@@ -1,37 +1,27 @@
-# ![](https://raw.githubusercontent.com/yudai/gotty/master/resources/favicon.png) GoTTY - Share your terminal as a web application
+# ![](resources/favicon.png) GoTTY - Share your terminal as a web application
 
-[![GitHub release](http://img.shields.io/github/release/yudai/gotty.svg?style=flat-square)][release]
-[![Wercker](http://img.shields.io/wercker/ci/55d0eeff7331453f0801982c.svg?style=flat-square)][wercker]
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)][license]
 
-[release]: https://github.com/yudai/gotty/releases
-[wercker]: https://app.wercker.com/project/bykey/03b91f441bebeda34f80e09a9f14126f
-[license]: https://github.com/yudai/gotty/blob/master/LICENSE
+[license]: https://github.com/benapetr/gotty/blob/master/LICENSE
 
 GoTTY is a simple command line tool that turns your CLI tools into web applications.
 
-![Screenshot](https://raw.githubusercontent.com/yudai/gotty/master/screenshot.gif)
+![Screenshot](screenshot.gif)
 
 # Installation
 
-Download the latest stable binary file from the [Releases](https://github.com/yudai/gotty/releases) page. Note that the release marked `Pre-release` is built for testing purpose, which can include unstable or breaking changes. Download a release marked [Latest release](https://github.com/yudai/gotty/releases/latest) for a stabale build.
-
-(Files named with `darwin_amd64` are for Mac OS X users)
-
-## Homebrew Installation
-
-You can install GoTTY with [Homebrew](http://brew.sh/) as well.
+Install the current version with Go:
 
 ```sh
-$ brew install yudai/gotty/gotty
+go install github.com/benapetr/gotty@latest
 ```
 
-## `go get` Installation (Development)
-
-If you have a Go language environment, you can install GoTTY with the `go get` command. However, this command builds a binary file from the latest master branch, which can include unstable or breaking changes. GoTTY requires go1.9 or later.
+Or build it from a source checkout:
 
 ```sh
-$ go get github.com/yudai/gotty
+git clone https://github.com/benapetr/gotty.git
+cd gotty
+make
 ```
 
 # Usage
@@ -94,7 +84,7 @@ preferences {
 }
 ```
 
-See the [`.gotty`](https://github.com/yudai/gotty/blob/master/.gotty) file in this repository for the list of configuration options.
+See the [`.gotty`](.gotty) file in this repository for the list of configuration options.
 
 ### Security Options
 
@@ -151,40 +141,32 @@ $ gotty -w docker run -it --rm busybox
 
 ## Development
 
-You can build a binary using the following commands. Windows is not supported now. go1.9 is required.
+GoTTY is built with Go modules and requires Go 1.22 or later. The default build embeds the checked-in static assets from `server/static`.
 
 ```sh
-# Install tools
-go get github.com/jteeuwen/go-bindata/...
-go get github.com/tools/godep
-
-# Build
 make
 ```
 
-To build the frontend part (JS files and other static files), you need `npm`.
+Useful development commands:
+
+```sh
+go test ./...
+go build ./...
+```
+
+If you change frontend TypeScript or CSS sources, rebuild the frontend bundle and refresh embedded static assets:
+
+```sh
+cd js
+npm install
+$(npm bin)/webpack
+cd ..
+make asset
+```
 
 ## Architecture
 
 GoTTY uses [xterm.js](https://xtermjs.org/) and [hterm](https://groups.google.com/a/chromium.org/forum/#!forum/chromium-hterm) to run a JavaScript based terminal on web browsers. GoTTY itself provides a websocket server that simply relays output from the TTY to clients and receives input from clients and forwards it to the TTY. This hterm + websocket idea is inspired by [Wetty](https://github.com/krishnasrinivas/wetty).
-
-## Alternatives
-
-### Command line client
-
-* [gotty-client](https://github.com/moul/gotty-client): If you want to connect to GoTTY server from your terminal
-
-### Terminal/SSH on Web Browsers
-
-* [Secure Shell (Chrome App)](https://chrome.google.com/webstore/detail/secure-shell/pnhechapfaindjhompbnflcldabbghjo): If you are a chrome user and need a "real" SSH client on your web browser, perhaps the Secure Shell app is what you want
-* [Wetty](https://github.com/krishnasrinivas/wetty): Node based web terminal (SSH/login)
-* [ttyd](https://tsl0922.github.io/ttyd): C port of GoTTY with CJK and IME support
-
-### Terminal Sharing
-
-* [tmate](http://tmate.io/): Forked-Tmux based Terminal-Terminal sharing
-* [termshare](https://termsha.re): Terminal-Terminal sharing through a HTTP server
-* [tmux](https://tmux.github.io/): Tmux itself also supports TTY sharing through SSH)
 
 # License
 

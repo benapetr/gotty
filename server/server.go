@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"html/template"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"net"
@@ -14,13 +15,12 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
-	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 
-	"github.com/yudai/gotty/pkg/homedir"
-	"github.com/yudai/gotty/pkg/randomstring"
-	"github.com/yudai/gotty/webtty"
+	"github.com/benapetr/gotty/pkg/homedir"
+	"github.com/benapetr/gotty/pkg/randomstring"
+	"github.com/benapetr/gotty/webtty"
 )
 
 // Server provides a webtty HTTP endpoint.
@@ -38,7 +38,7 @@ type Server struct {
 func New(factory Factory, options *Options) (*Server, error) {
 	indexData, err := Asset("static/index.html")
 	if err != nil {
-		panic("index not found") // must be in bindata
+		panic("index not found") // must be embedded
 	}
 	if options.IndexFile != "" {
 		path := homedir.Expand(options.IndexFile)
@@ -181,9 +181,11 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 }
 
 func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFunc, pathPrefix string, counter *counter) http.Handler {
-	staticFileHandler := http.FileServer(
-		&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "static"},
-	)
+	staticFiles, err := fs.Sub(assets, "static")
+	if err != nil {
+		panic("static assets not found")
+	}
+	staticFileHandler := http.FileServer(http.FS(staticFiles))
 
 	var siteMux = http.NewServeMux()
 	siteMux.HandleFunc(pathPrefix, server.handleIndex)

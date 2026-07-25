@@ -3,47 +3,50 @@ GIT_COMMIT = `git rev-parse HEAD | cut -c1-7`
 VERSION = 2.0.0-alpha.3
 BUILD_OPTIONS = -ldflags "-X main.Version=$(VERSION) -X main.CommitID=$(GIT_COMMIT)"
 
-gotty: main.go server/*.go webtty/*.go backend/*.go Makefile
-	godep go build ${BUILD_OPTIONS}
+.PHONY: gotty
+gotty: build
+
+.PHONY: build
+build:
+	go build -mod=mod ${BUILD_OPTIONS}
+
+.PHONY: clean
+clean:
+	rm -f gotty
 
 .PHONY: asset
-asset: bindata/static/js/gotty-bundle.js bindata/static/index.html bindata/static/favicon.png bindata/static/css/index.css bindata/static/css/xterm.css bindata/static/css/xterm_customize.css
-	go-bindata -prefix bindata -pkg server -ignore=\\.gitkeep -o server/asset.go bindata/...
-	gofmt -w server/asset.go
+asset: server/static/js/gotty-bundle.js server/static/index.html server/static/favicon.png server/static/css/index.css server/static/css/xterm.css server/static/css/xterm_customize.css
 
 .PHONY: all
 all: asset gotty
 
-bindata:
-	mkdir bindata
+server/static:
+	mkdir -p server/static
 
-bindata/static: bindata
-	mkdir bindata/static
+server/static/index.html: server/static resources/index.html
+	cp resources/index.html server/static/index.html
 
-bindata/static/index.html: bindata/static resources/index.html
-	cp resources/index.html bindata/static/index.html
+server/static/favicon.png: server/static resources/favicon.png
+	cp resources/favicon.png server/static/favicon.png
 
-bindata/static/favicon.png: bindata/static resources/favicon.png
-	cp resources/favicon.png bindata/static/favicon.png
-
-bindata/static/js: bindata/static
-	mkdir -p bindata/static/js
+server/static/js: server/static
+	mkdir -p server/static/js
 
 
-bindata/static/js/gotty-bundle.js: bindata/static/js js/dist/gotty-bundle.js
-	cp js/dist/gotty-bundle.js bindata/static/js/gotty-bundle.js
+server/static/js/gotty-bundle.js: server/static/js js/dist/gotty-bundle.js
+	cp js/dist/gotty-bundle.js server/static/js/gotty-bundle.js
 
-bindata/static/css: bindata/static
-	mkdir -p bindata/static/css
+server/static/css: server/static
+	mkdir -p server/static/css
 
-bindata/static/css/index.css: bindata/static/css resources/index.css
-	cp resources/index.css bindata/static/css/index.css
+server/static/css/index.css: server/static/css resources/index.css
+	cp resources/index.css server/static/css/index.css
 
-bindata/static/css/xterm_customize.css: bindata/static/css resources/xterm_customize.css
-	cp resources/xterm_customize.css bindata/static/css/xterm_customize.css
+server/static/css/xterm_customize.css: server/static/css resources/xterm_customize.css
+	cp resources/xterm_customize.css server/static/css/xterm_customize.css
 
-bindata/static/css/xterm.css: bindata/static/css js/node_modules/xterm/dist/xterm.css
-	cp js/node_modules/xterm/dist/xterm.css bindata/static/css/xterm.css
+server/static/css/xterm.css: server/static/css js/node_modules/xterm/dist/xterm.css
+	cp js/node_modules/xterm/dist/xterm.css server/static/css/xterm.css
 
 js/node_modules/xterm/dist/xterm.css:
 	cd js && \
@@ -51,20 +54,19 @@ js/node_modules/xterm/dist/xterm.css:
 
 js/dist/gotty-bundle.js: js/src/* js/node_modules/webpack
 	cd js && \
-	`npm bin`/webpack
+	./node_modules/.bin/webpack
 
 js/node_modules/webpack:
 	cd js && \
 	npm install
 
 tools:
-	go get github.com/tools/godep
 	go get github.com/mitchellh/gox
 	go get github.com/tcnksm/ghr
-	go get github.com/jteeuwen/go-bindata/...
 
 test:
-	if [ `go fmt $(go list ./... | grep -v /vendor/) | wc -l` -gt 0 ]; then echo "go fmt error"; exit 1; fi
+	if [ `go fmt $$(go list -mod=mod ./...) | wc -l` -gt 0 ]; then echo "go fmt error"; exit 1; fi
+	go test -mod=mod ./...
 
 cross_compile:
 	GOARM=5 gox -os="darwin linux freebsd netbsd openbsd" -arch="386 amd64 arm" -osarch="!darwin/arm" -output "${OUTPUT_DIR}/pkg/{{.OS}}_{{.Arch}}/{{.Dir}}"

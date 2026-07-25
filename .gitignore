@@ -1,4 +1,8 @@
-gotty
-bindata
-builds
-js/node_modules/*
+/gotty
+/bindata/
+/builds/
+/js/node_modules/
+/vendor/
+
+*.test
+coverage.out

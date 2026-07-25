@@ -14,15 +14,35 @@ type pipePair struct {
 	*io.PipeWriter
 }
 
+type pipeSlave struct {
+	*io.PipeReader
+	*io.PipeWriter
+}
+
+func (slave pipeSlave) WindowTitleVariables() map[string]interface{} {
+	return nil
+}
+
+func (slave pipeSlave) ResizeTerminal(columns int, rows int) error {
+	return nil
+}
+
 func TestWriteFromPTY(t *testing.T) {
 	connInPipeReader, connInPipeWriter := io.Pipe() // in to conn
 	connOutPipeReader, _ := io.Pipe()               // out from conn
+	slaveOutPipeReader, slaveOutPipeWriter := io.Pipe()
+	slaveInPipeReader, slaveInPipeWriter := io.Pipe()
+	defer slaveInPipeReader.Close()
 
 	conn := pipePair{
 		connOutPipeReader,
 		connInPipeWriter,
 	}
-	dt, err := New(conn)
+	slave := pipeSlave{
+		slaveOutPipeReader,
+		slaveInPipeWriter,
+	}
+	dt, err := New(conn, slave)
 	if err != nil {
 		t.Fatalf("Unexpected error from New(): %s", err)
 	}
@@ -33,13 +53,22 @@ func TestWriteFromPTY(t *testing.T) {
 	go func() {
 		wg.Done()
 		err := dt.Run(ctx)
-		if err != nil {
+		if err != nil && err != context.Canceled {
 			t.Fatalf("Unexpected error from Run(): %s", err)
 		}
 	}()
 
+	buf := make([]byte, 1024)
+	n, err := connInPipeReader.Read(buf)
+	if err != nil {
+		t.Fatalf("Unexpected error from Read(): %s", err)
+	}
+	if !bytes.Equal(buf[:n], []byte{SetWindowTitle}) {
+		t.Fatalf("Unexpected message received: `%s`", buf[:n])
+	}
+
 	message := []byte("foobar")
-	n, err := dt.TTY().Write(message)
+	n, err = slaveOutPipeWriter.Write(message)
 	if err != nil {
 		t.Fatalf("Unexpected error from Write(): %s", err)
 	}
@@ -47,7 +76,6 @@ func TestWriteFromPTY(t *testing.T) {
 		t.Fatalf("Write() accepted `%d` for message `%s`", n, message)
 	}
 
-	buf := make([]byte, 1024)
 	n, err = connInPipeReader.Read(buf)
 	if err != nil {
 		t.Fatalf("Unexpected error from Read(): %s", err)
@@ -71,13 +99,19 @@ func TestWriteFromPTY(t *testing.T) {
 func TestWriteFromConn(t *testing.T) {
 	connInPipeReader, connInPipeWriter := io.Pipe()   // in to conn
 	connOutPipeReader, connOutPipeWriter := io.Pipe() // out from conn
+	slaveOutPipeReader, _ := io.Pipe()
+	slaveInPipeReader, slaveInPipeWriter := io.Pipe()
 
 	conn := pipePair{
 		connOutPipeReader,
 		connInPipeWriter,
 	}
+	slave := pipeSlave{
+		slaveOutPipeReader,
+		slaveInPipeWriter,
+	}
 
-	dt, err := New(conn)
+	dt, err := New(conn, slave, WithPermitWrite())
 	if err != nil {
 		t.Fatalf("Unexpected error from New(): %s", err)
 	}
@@ -88,7 +122,7 @@ func TestWriteFromConn(t *testing.T) {
 	go func() {
 		wg.Done()
 		err := dt.Run(ctx)
-		if err != nil {
+		if err != nil && err != context.Canceled {
 			t.Fatalf("Unexpected error from Run(): %s", err)
 		}
 	}()
@@ -99,8 +133,16 @@ func TestWriteFromConn(t *testing.T) {
 	)
 	readBuf := make([]byte, 1024)
 
+	n, err = connInPipeReader.Read(readBuf)
+	if err != nil {
+		t.Fatalf("Unexpected error from Read(): %s", err)
+	}
+	if !bytes.Equal(readBuf[:n], []byte{SetWindowTitle}) {
+		t.Fatalf("Unexpected message received: `%s`", readBuf[:n])
+	}
+
 	// input
-	message = []byte("0hello\n") // line buffered canonical mode
+	message = []byte{Input, 'h', 'e', 'l', 'l', 'o', '\n'}
 	n, err = connOutPipeWriter.Write(message)
 	if err != nil {
 		t.Fatalf("Unexpected error from Write(): %s", err)
@@ -109,7 +151,7 @@ func TestWriteFromConn(t *testing.T) {
 		t.Fatalf("Write() accepted `%d` for message `%s`", n, message)
 	}
 
-	n, err = dt.TTY().Read(readBuf)
+	n, err = slaveInPipeReader.Read(readBuf)
 	if err != nil {
 		t.Fatalf("Unexpected error from Write(): %s", err)
 	}
@@ -118,7 +160,7 @@ func TestWriteFromConn(t *testing.T) {
 	}
 
 	// ping
-	message = []byte("1\n") // line buffered canonical mode
+	message = []byte{Ping}
 	n, err = connOutPipeWriter.Write(message)
 	if n != len(message) {
 		t.Fatalf("Write() accepted `%d` for message `%s`", n, message)
@@ -128,7 +170,7 @@ func TestWriteFromConn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error from Read(): %s", err)
 	}
-	if !bytes.Equal(readBuf[:n], []byte{'1'}) {
+	if !bytes.Equal(readBuf[:n], []byte{Pong}) {
 		t.Fatalf("Unexpected message received: `%s`", readBuf[:n])
 	}
 
